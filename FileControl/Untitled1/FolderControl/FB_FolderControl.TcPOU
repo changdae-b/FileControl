@@ -1,0 +1,226 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_FolderControl" Id="{d1162777-d0ce-4fa6-9ff7-bfe77784e9fb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FolderControl
+VAR
+	eState : E_FolderControlState;
+	fbEnumFindFileEntry : FB_EnumFindFileEntry;
+	fbCreateDir : FB_CreateDir;
+	_CreateFolderPath : T_MAXSTRING;
+	_CheckFolderPath : T_MAXSTRING;
+	_FolderExist : BOOL;
+	
+	_Error : BOOL;
+	_ErrorID : UDINT;
+	_ErrorState : STRING(50);
+	_AmsNetID : T_AmsNetID;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="AmsNetId" Id="{52557d6d-bbc5-4024-ad26-e97ffbf0ef5e}">
+      <Declaration><![CDATA[PROPERTY AmsNetId : T_AmsNetId]]></Declaration>
+      <Get Name="Get" Id="{c8df2d20-94cb-431e-a793-809d3e7dd313}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[AmsNetId := _AmsNetId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9b9966cb-a67f-4e11-a9cd-8354a56cc399}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_AmsNetId := AmsNetId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="Busy" Id="{c91c4775-5804-4ff5-86e2-eaf3f7151df7}">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Busy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d71f38ef-1a5a-4a08-b998-3d2b2d668f8c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Busy := NOT (eState = 0 OR eState = E_FolderControlState.Error);
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="CheckFolder" Id="{281845ca-f0df-435b-8b6d-05d4e31f3dbe}">
+      <Declaration><![CDATA[METHOD CheckFolder : BOOL
+VAR_INPUT
+	sPath : T_MAXSTRING;
+END_VAR
+VAR
+	i : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Busy THEN
+	RETURN;
+END_IF
+ResetStatus();
+
+eState := E_FolderControlState.ReadyFindFolder;
+
+MEMSET(ADR(_CheckFolderPath), 0, SIZEOF(_CheckFolderPath));
+
+IF RIGHT(sPath,1) = '/' OR RIGHT(sPath,1) = '\' THEN
+	sPath := Delete(sPath,1,LEN(sPath));
+END_IF
+
+FOR i:=0 TO LEN(sPath) BY 1 DO
+	IF sPath[i] = 47 THEN 	// '/'
+		_CheckFolderPath[i] := 92; 	// '\'
+	ELSE
+		_CheckFolderPath[i] := sPath[i];
+	END_IF	
+END_FOR
+
+CheckFolder := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CreateFolder" Id="{0f104e9e-77f9-47ff-ba20-a87bc15c57d5}">
+      <Declaration><![CDATA[METHOD CreateFolder : BOOL
+VAR_INPUT
+	sPath : T_MAXSTRING;
+END_VAR
+VAR
+	i : INT;
+END_VAR
+(*
+	It only can create one more subfolder
+	폴더 한번에 한개만 생성가능 즉, C:\Test\Test1\Test2 를 생성하고자 할때 Test1 폴더가 없으면 생성 불가
+*)]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Busy THEN
+	RETURN;
+END_IF
+ResetStatus();
+
+eState := E_FolderControlState.ReadyForCreateFolder;
+
+MEMSET(ADR(_CreateFolderPath), 0, SIZEOF(_CreateFolderPath));
+
+IF RIGHT(sPath,1) = '/' OR RIGHT(sPath,1) = '\' THEN
+	sPath := Delete(sPath,1,LEN(sPath));
+END_IF
+
+FOR i:=0 TO LEN(sPath) BY 1 DO
+	IF sPath[i] = 47 THEN 	// '/'
+		_CreateFolderPath[i] := 92; 	// '\'
+	ELSE
+		_CreateFolderPath[i] := sPath[i];
+	END_IF	
+END_FOR
+
+CreateFolder := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CyclicLogic" Id="{f180fcd0-046e-417d-a34b-954e784498d4}">
+      <Declaration><![CDATA[METHOD CyclicLogic
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eState OF
+	E_FolderControlState.init:
+		;
+		
+	E_FolderControlState.ReadyFindFolder:
+		fbEnumFindFileEntry(bExecute:= FALSE);
+		fbEnumFindFileEntry.eCmd := E_EnumCmdType.eEnumCmd_First;
+		_FolderExist := FALSE;
+		eState := E_FolderControlState.FindFolder;
+	
+	E_FolderControlState.FindFolder:
+		fbEnumFindFileEntry( 
+			sPathName:= _CheckFolderPath, 
+			bExecute:= TRUE);
+		IF NOT fbEnumFindFileEntry.bBusy THEN
+			IF fbEnumFindFileEntry.stFindFile.fileAttributes.bDirectory THEN
+				_FolderExist := TRUE;
+				eState := E_FolderControlState.init;
+			END_IF
+		END_IF
+		
+	E_FolderControlState.ReadyForCreateFolder:
+		fbCreateDir(bExecute:= FALSE);
+		eState := E_FolderControlState.CreateFolder;
+		
+	E_FolderControlState.CreateFolder:
+		fbCreateDir(
+			sNetId:= , 
+			sPathName:= _CreateFolderPath,
+			ePath:= E_OpenPath.PATH_GENERIC, 
+			bExecute:= TRUE, 
+			tTimeout:= , 
+			bBusy=> , 
+			bError=> , 
+			nErrId=> );
+		IF NOT fbCreateDir.bBusy THEN
+			IF fbCreateDir.bError THEN
+				_ErrorState := TO_STRING(E_FolderControlState.CreateFolder);
+				eState := E_FolderControlState.Error;
+				_ErrorID := fbCreateDir.nErrId;
+			ELSE
+				eState := E_FolderControlState.init;
+			END_IF
+		END_IF
+	
+	E_FolderControlState.Error:
+		_Error := TRUE;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="Error" Id="{30212956-68f3-4163-b5c6-5e7c2677ce6c}">
+      <Declaration><![CDATA[{attribute 'monitoring':='variable'}
+PROPERTY Error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6724cf85-087c-4747-a93c-e6db98f9d74b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Error := _Error;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ErrorID" Id="{6458ab88-ee28-4d15-8690-9f62c1ed2769}">
+      <Declaration><![CDATA[{attribute 'monitoring':='variable'}
+PROPERTY ErrorID : UDINT]]></Declaration>
+      <Get Name="Get" Id="{d03168f5-a88d-44b5-89a7-7e8ed282e8d9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ErrorID := _ErrorID;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="isFolderExist" Id="{7a166b3f-81d2-43e0-926b-c6c11769974f}">
+      <Declaration><![CDATA[PROPERTY isFolderExist : BOOL]]></Declaration>
+      <Get Name="Get" Id="{61fdd18d-758a-4988-8d81-3c22eeadd0b6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[isFolderExist := _FolderExist;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="ResetStatus" Id="{31b27e1c-435a-4935-a2a7-dac777e59e15}">
+      <Declaration><![CDATA[METHOD PRIVATE ResetStatus : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_ErrorID := 0;
+_Error := FALSE;
+_ErrorState := '';]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

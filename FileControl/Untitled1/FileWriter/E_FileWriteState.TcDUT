@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="E_FileWriteState" Id="{4666dfff-62d9-4e16-bd3e-d2099422b347}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_FileWriteState :
+(
+	init := 0,
+	ReadyFileCreate := 5,
+	FileOpen := 10, 
+	FileWrite := 20, 
+	FileClose := 30, 
+	Error := 999
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

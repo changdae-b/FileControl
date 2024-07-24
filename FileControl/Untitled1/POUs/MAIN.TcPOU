@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{6290f93f-82e3-4ec3-8403-c429fddf22d1}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	fbFolderControl : FB_FolderControl;
+	sPath : T_MaxString := 'C:\Test\test2\test3';
+	sFile : STRING;
+	bStart: BOOL;
+	bCheck: BOOL;
+	
+	step : INT;
+	fbFileControl : FB_FileControl;
+	sTest : T_MaxString;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+IF bStart THEN
+	bStart := FALSE;
+	fbFolderControl.CreateFolder(sPath);
+END_IF
+IF bCheck THEN
+	bCheck := FALSE;
+	fbFolderControl.CheckFolder(sPath);
+END_IF
+
+fbFolderCOntrol.CyclicLogic();
+
+CASE step OF
+	0:
+		;
+	10:
+		fbFileControl.OverwriteFile(sPath,ADR(sTest),LEN(sTest));
+		step := 0;
+	20:
+		fbFileControl.AppendwriteFile(sPath,ADR(sTest),LEN(sTest));
+		step := 0;
+END_CASE
+fbFileControl.CyclicLogit();]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

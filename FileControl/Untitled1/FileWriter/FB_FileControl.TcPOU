@@ -1,0 +1,204 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_FileControl" Id="{070c0b5c-775e-4635-940f-f0e2b017fa05}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FileControl
+VAR
+	fbFileWrite : FB_FileWrite;
+	fbFileOpen : FB_FileOpen;
+	fbFileClose : FB_FileClose;
+	_Path : T_MAXSTRING;
+	eState : E_FileWriteState;
+	FileWriteMode : DWORD;
+	
+	_pSomethingToWrite : PVOID;
+	_cbSomethingToWrite : UDINT;
+	
+	_Error : BOOL;
+	_ErrorID : UDINT;
+	_ErrorState : STRING(50);
+	_AmsNetId : T_AmsNetId;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="AmsNetId" Id="{7ad65eb5-eefa-400d-bc50-0db854e218e3}">
+      <Declaration><![CDATA[PROPERTY AmsNetId : T_AmsNetId]]></Declaration>
+      <Get Name="Get" Id="{3e09ca02-4a64-4339-8596-9d22cdea4002}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[AmsNetId := _AmsNetId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{bf50703b-870c-4d4f-85f6-968ee39a92d3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_AmsNetId := AmsNetId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="AppendwriteFile" Id="{8468efdd-aa44-4c3b-ae86-8372a0812dcc}">
+      <Declaration><![CDATA[METHOD AppendwriteFile : BOOL
+VAR_INPUT
+	sPathAndFileName : T_MAXSTRING; //Path and filename with file extension
+	pSomethingtoWrite : PVOID;
+	cbSomethingtoWrite : UDINT; 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Busy THEN
+	RETURN;
+END_IF
+ResetStatus();
+eState := E_FileWriteState.ReadyFileCreate;
+_Path := sPathAndFileName;
+FileWriteMode := FOPEN_MODEAPPEND OR FOPEN_MODETEXT;
+_pSomethingtoWrite := pSomethingtoWrite;
+_cbSomethingToWrite := cbSomethingtoWrite;
+AppendwriteFile := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="Busy" Id="{bb254a40-c816-48cc-b1dc-68362f00461b}">
+      <Declaration><![CDATA[{attribute 'monitoring':='call'}
+PROPERTY Busy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b887135a-b514-404a-b29c-df2e5eea616e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Busy := NOT(eState = 0 OR Error);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="CyclicLogit" Id="{cd297ac8-8917-4165-ab6c-7a3cbb10e0d9}">
+      <Declaration><![CDATA[METHOD CyclicLogit
+VAR_INST
+	hFile : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eState OF
+	E_FileWriteState.Init:
+		;
+		
+	E_FileWriteState.ReadyFileCreate:
+		eState := E_FileWriteState.FileOpen;
+		
+	E_FileWriteState.FileOpen:
+		fbFileOpen(sNetId:= _AmsNetID, 
+					sPathName:= _Path, 
+					nMode:= FileWriteMode, 
+					bExecute:= TRUE,  
+					hFile=> hFile);
+		IF NOT fbFileOpen.bBusy THEN
+			IF fbFileOpen.bError THEN
+				eState := E_FileWriteState.Error;
+				_ErrorID := fbFileOpen.nErrId;
+				_ErrorState := TO_STRING(E_FileWriteState.FileOpen);
+			ELSE
+				eState := E_FileWriteState.FileWrite;
+			END_IF
+			fbFileOpen(bExecute := FALSE);	
+		END_IF
+		
+	E_FileWriteState.FileWrite:
+		fbFileWrite(sNetId:= _AmsNetID,
+					hFile:= hFile, 
+					pWriteBuff:= _pSomethingToWrite, 
+					cbWriteLen:= _cbSomethingToWrite, 
+					bExecute:= TRUE);
+		IF NOT fbFileWrite.bBusy THEN
+			IF fbFileWrite.bError THEN
+				_ErrorID := fbFileWrite.nErrId;
+				_ErrorState := TO_STRING(E_FileWriteState.FileWrite);
+				eState := E_FileWriteState.Error;
+			ELSE
+				eState := E_FileWriteState.FileClose;	
+			END_IF
+			fbFileWrite(bExecute := FALSE);
+		END_IF
+		
+	E_FileWriteState.FileClose:
+		fbFileClose(sNetId:= _AmsNetID,
+					hFile:= hFile, 
+					bExecute:= TRUE);
+		IF NOT fbFileClose.bBusy THEN
+			IF fbFileClose.bError THEN
+				eState := E_FileWriteState.Error;
+				_ErrorID := fbFileClose.nErrId;
+				_ErrorState := TO_STRING(E_FileWriteState.FileClose);
+			ELSE
+				eState := E_FileWriteState.Init;
+			END_IF
+			fbFileClose(bExecute := FALSE);
+		END_IF
+		
+	E_FileWriteState.Error: 
+		_Error := TRUE;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="Error" Id="{f9134595-5e9c-444d-8ba4-8bc6f6077b4b}">
+      <Declaration><![CDATA[{attribute 'monitoring':='variable'}
+PROPERTY Error : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8d29d31e-2ae6-4e3c-9d10-8c04f02daebf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Error := _Error;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ErrorID" Id="{2d58ceeb-5b8c-41fa-b089-2b6f5d5f20f8}">
+      <Declaration><![CDATA[{attribute 'monitoring':='variable'}
+PROPERTY ErrorID : UDINT]]></Declaration>
+      <Get Name="Get" Id="{f65bdf2c-0567-49f7-9e9c-4a7be95be206}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ErrorID := _ErrorID;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="OverwriteFile" Id="{e895f7e6-a312-4986-9e43-aa5a258ba5a3}">
+      <Declaration><![CDATA[METHOD OverwriteFile : BOOL
+VAR_INPUT
+	sPathAndFileName : T_MAXSTRING; //Path and filename with file extension
+	pSomethingtoWrite : PVOID;
+	cbSomethingtoWrite : UDINT; //IF you put sizeof(string) they could be wrong data so, you should do LEN(string) 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Busy THEN
+	RETURN;
+END_IF
+ResetStatus();
+eState := E_FileWriteState.ReadyFileCreate;
+_Path := sPathAndFileName;
+FileWriteMode := FOPEN_MODEWRITE OR FOPEN_MODETEXT;
+_pSomethingtoWrite := pSomethingtoWrite;
+_cbSomethingToWrite := cbSomethingtoWrite;
+OverWriteFile := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetStatus" Id="{205c2d05-84cf-4de4-9627-f5eb84ac87be}">
+      <Declaration><![CDATA[METHOD PRIVATE ResetStatus : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Error := FALSE;
+_ErrorID := 0;
+_ErrorState := '';
+FileWriteMode := 0;
+
+ResetStatus := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

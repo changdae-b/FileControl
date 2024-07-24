@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="E_FolderControlState" Id="{2da63c1f-e4b7-4005-a552-4fc49510ee5c}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_FolderControlState :
+(
+	init := 0,
+	ReadyFindFolder := 10,
+	FindFolder := 20,
+	ReadyForCreateFolder := 100,
+	CreateFolder := 110,
+	Error := 999
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
